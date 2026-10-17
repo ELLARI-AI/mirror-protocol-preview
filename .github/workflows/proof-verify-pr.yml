@@ -8,7 +8,7 @@ on:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # Temporary: remove after Ubuntu 26 integration validation
     steps:
       - uses: actions/checkout@v4
 
