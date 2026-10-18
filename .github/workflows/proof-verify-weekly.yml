@@ -7,7 +7,7 @@ on:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # Temporary: remove after Ubuntu 26 integration validation
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
