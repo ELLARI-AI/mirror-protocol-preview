@@ -17,32 +17,33 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y jq curl
 
+      - name: Synthetic proof verifier regressions
+        run: python3 -m unittest discover -s tests -v
+
       - name: Validate manifest schema
-        run: |
-          test -f docs/proof/bundle_manifest.json
-          jq -e '.title and .version and (.files|type=="array") and .issuer and .license' docs/proof/bundle_manifest.json
+        run: bash scripts/verify-proof-bundle.sh validate docs/proof
 
       - name: Check referenced files exist
-        run: |
-          for f in $(jq -r '.files[]' docs/proof/bundle_manifest.json); do
-            [ -f "docs/proof/$f" ] || { echo "::error::Missing $f"; exit 1; }
-          done
+        run: bash scripts/verify-proof-bundle.sh files docs/proof
 
       - name: Compute hashes
         id: hashes
         run: |
-          echo "HASHES<<EOF" >> $GITHUB_OUTPUT
-          for f in $(jq -r '.files[]' docs/proof/bundle_manifest.json); do
-            sha=$(sha256sum "docs/proof/$f" | awk '{print $1}')
-            echo "$f  $sha"
-          done >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          hashes="$(bash scripts/verify-proof-bundle.sh hashes docs/proof)"
+          {
+            echo "HASHES<<EOF"
+            printf '%s\n' "$hashes"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Comment hashes on PRs
         if: ${{ github.event_name == 'pull_request' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          printf "### Proof Verify — Results\n\n**Files & Hashes**\n\`\`\`\n%s\n\`\`\`\n" "${{ steps.hashes.outputs.HASHES }}" > /tmp/c.md
+          {
+            printf '%s\n' '### Proof Verify — Results' '' '**Files & Hashes**' '```'
+            printf '%s\n' "${{ steps.hashes.outputs.HASHES }}"
+            printf '%s\n' '```'
+          } > /tmp/c.md
           gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/c.md
-
