@@ -7,6 +7,8 @@ on:
 
 jobs:
   verify:
+    permissions:
+      contents: read
     runs-on: ubuntu-24.04 # Temporary: remove after Ubuntu 26 integration validation
     steps:
       - name: Checkout repo
@@ -27,23 +29,4 @@ jobs:
         run: bash scripts/verify-proof-bundle.sh files docs/proof
 
       - name: Compute hashes
-        id: hashes
-        run: |
-          hashes="$(bash scripts/verify-proof-bundle.sh hashes docs/proof)"
-          {
-            echo "HASHES<<EOF"
-            printf '%s\n' "$hashes"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Comment hashes on PRs
-        if: ${{ github.event_name == 'pull_request' }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          {
-            printf '%s\n' '### Proof Verify — Results' '' '**Files & Hashes**' '```'
-            printf '%s\n' "${{ steps.hashes.outputs.HASHES }}"
-            printf '%s\n' '```'
-          } > /tmp/c.md
-          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/c.md
+        run: bash scripts/verify-proof-bundle.sh hashes docs/proof

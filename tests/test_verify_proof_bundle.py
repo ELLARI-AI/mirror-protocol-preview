@@ -1,4 +1,6 @@
+import base64
 import hashlib
+import os
 import json
 import shutil
 import subprocess
@@ -79,6 +81,33 @@ class VerifyProofBundleTests(unittest.TestCase):
         self.assertIn(hashlib.sha256(payload).hexdigest(), result.stdout)
         self.assertIn("artifact.txt", result.stdout)
 
+    def test_hash_comment_treats_hashes_as_data(self):
+        workflow = (
+            SCRIPT.parents[1] / ".github" / "workflows" / "proof-verify-pr.yml"
+        ).read_text(encoding="utf-8")
+        output_expression = "$" + "{{ needs.verify.outputs.hashes_b64 }}"
+        self.assertEqual(workflow.count(output_expression), 1)
+        self.assertIn(f"HASHES_B64: {output_expression}", workflow)
+        comment_job = workflow.split("  comment-hashes:", 1)[1]
+        comment_run = comment_job.split("        run: |", 1)[1]
+        self.assertNotIn("$" + "{{", comment_run)
+
+        marker = self.proof_dir / "shell-was-executed"
+        payload = f"$(touch {marker})"
+        encoded = base64.b64encode(payload.encode("utf-8")).decode("ascii")
+        env = os.environ.copy()
+        env["HASHES_B64"] = encoded
+        command = 'hashes="$(printf "%s" "$HASHES_B64" | base64 --decode)"; printf "%s\\n" "$hashes"'
+        result = subprocess.run(
+            ["bash", "-c", command],
+            check=False,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, payload + "\\n")
+        self.assertFalse(marker.exists())
 
 if __name__ == "__main__":
     unittest.main()
