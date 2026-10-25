@@ -32,7 +32,7 @@ jobs:
           hashes="$(bash scripts/verify-proof-bundle.sh hashes docs/proof)"
           {
             echo "HASHES<<EOF"
-            printf '%s\\n' "$hashes"
+            printf '%s\n' "$hashes"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
@@ -41,5 +41,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          printf "### Proof Verify — Results\\n\\n**Files & Hashes**\\n\\`\\n%s\\n\\`\\n" "${{ steps.hashes.outputs.HASHES }}" > /tmp/c.md
+          {
+            printf '%s\n' '### Proof Verify — Results' '' '**Files & Hashes**' '```'
+            printf '%s\n' "${{ steps.hashes.outputs.HASHES }}"
+            printf '%s\n' '```'
+          } > /tmp/c.md
           gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/c.md
