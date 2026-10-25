@@ -106,7 +106,7 @@ class VerifyProofBundleTests(unittest.TestCase):
             env=env,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, payload + "\\n")
+        self.assertEqual(result.stdout, payload)
         self.assertFalse(marker.exists())
 
 if __name__ == "__main__":
