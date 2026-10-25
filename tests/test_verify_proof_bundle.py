@@ -97,7 +97,7 @@ class VerifyProofBundleTests(unittest.TestCase):
         encoded = base64.b64encode(payload.encode("utf-8")).decode("ascii")
         env = os.environ.copy()
         env["HASHES_B64"] = encoded
-        command = 'hashes="$(printf "%s" "$HASHES_B64" | base64 --decode)"; printf "%s\\n" "$hashes"'
+        command = 'hashes="$(printf "%s" "$HASHES_B64" | base64 --decode)"; printf "%s" "$hashes"'
         result = subprocess.run(
             ["bash", "-c", command],
             check=False,
