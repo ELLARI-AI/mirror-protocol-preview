@@ -4,6 +4,10 @@ on:
   pull_request:
     paths:
       - "docs/proof/**"
+      - ".github/workflows/proof-verify-pr.yml"
+      - ".github/workflows/proof-verify-weekly.yml"
+      - "scripts/verify-proof-bundle.sh"
+      - "tests/**"
   workflow_dispatch: {}
 
 jobs:
