@@ -14,7 +14,8 @@ jobs:
   verify:
     permissions:
       contents: read
-      pull-requests: write
+    outputs:
+      hashes_b64: ${{ steps.hashes.outputs.HASHES_B64 }}
     runs-on: ubuntu-24.04 # Temporary: remove after Ubuntu 26 integration validation
     steps:
       - uses: actions/checkout@v4
@@ -37,20 +38,27 @@ jobs:
         id: hashes
         run: |
           hashes="$(bash scripts/verify-proof-bundle.sh hashes docs/proof)"
-          {
-            echo "HASHES<<EOF"
-            printf '%s\n' "$hashes"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+          hashes_b64="$(printf '%s' "$hashes" | base64 -w0)"
+          echo "HASHES_B64=$hashes_b64" >> "$GITHUB_OUTPUT"
 
+  comment-hashes:
+    needs: verify
+    if: ${{ github.event_name == 'pull_request' }}
+    permissions:
+      pull-requests: write
+    runs-on: ubuntu-24.04
+    steps:
       - name: Comment results on PR
-        if: ${{ github.event_name == 'pull_request' }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HASHES_B64: ${{ needs.verify.outputs.hashes_b64 }}
         run: |
+          hashes="$(printf '%s' "$HASHES_B64" | base64 --decode)"
           {
-            printf '%s\n' '### Proof Verify — Results' '' '**Files & Hashes**' '```'
-            printf '%s\n' "${{ steps.hashes.outputs.HASHES }}"
-            printf '%s\n' '```'
+            printf '%s\n' '### Proof Verify — Results' '' '**Files & Hashes**' '~~~'
+            printf '%s\n' "$hashes"
+            printf '%s\n' '~~~'
           } > /tmp/c.md
-          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/c.md
+          gh pr comment "$PR_NUMBER" --body-file /tmp/c.md

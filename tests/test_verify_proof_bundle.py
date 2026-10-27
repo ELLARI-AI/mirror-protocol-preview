@@ -1,4 +1,6 @@
+import base64
 import hashlib
+import os
 import json
 import shutil
 import subprocess
@@ -79,6 +81,56 @@ class VerifyProofBundleTests(unittest.TestCase):
         self.assertIn(hashlib.sha256(payload).hexdigest(), result.stdout)
         self.assertIn("artifact.txt", result.stdout)
 
+    def test_hash_comment_treats_hashes_as_data(self):
+        workflow = (
+            SCRIPT.parents[1] / ".github" / "workflows" / "proof-verify-pr.yml"
+        ).read_text(encoding="utf-8")
+        output_expression = "$" + "{{ needs.verify.outputs.hashes_b64 }}"
+        self.assertEqual(workflow.count(output_expression), 1)
+        self.assertIn(f"HASHES_B64: {output_expression}", workflow)
+        comment_job = workflow.split("  comment-hashes:", 1)[1]
+        comment_run = comment_job.split("        run: |", 1)[1]
+        self.assertNotIn("$" + "{{", comment_run)
+
+        self.assertIn("GH_REPO: " + "$" + "{{ github.repository }}", comment_job)
+        self.assertNotIn("actions/checkout", comment_job)
+        self.assertIn("pull-requests: write", comment_job)
+        verify_job = workflow.split("  verify:", 1)[1].split("  comment-hashes:", 1)[0]
+        self.assertNotIn("pull-requests: write", verify_job)
+
+        # Execute the workflow's actual shell in a directory with no .git.
+        # A fake gh checks explicit repository context and captures the body.
+        marker = self.proof_dir / "shell-was-executed"
+        payload = f"$(touch {marker})\n`touch {marker}`"
+        fake_bin = self.proof_dir / "bin"
+        fake_bin.mkdir()
+        gh = fake_bin / "gh"
+        gh.write_text(
+            '#!/bin/bash\n'
+            'test "$GH_REPO" = "example/repository" || exit 41\n'
+            'test "$1" = pr && test "$2" = comment && test "$3" = 123 || exit 42\n'
+            'test "$4" = --body-file || exit 43\n'
+            'cat "$5" > "$CAPTURE"\n',
+            encoding="utf-8",
+        )
+        gh.chmod(0o755)
+        env = os.environ.copy()
+        env.update({
+            "HASHES_B64": base64.b64encode(payload.encode()).decode("ascii"),
+            "GH_REPO": "example/repository",
+            "PR_NUMBER": "123",
+            "CAPTURE": str(self.proof_dir / "captured"),
+            "PATH": str(fake_bin) + os.pathsep + env["PATH"],
+        })
+        import textwrap
+        command = textwrap.dedent(comment_run)
+        result = subprocess.run(
+            ["bash", "-e", "-c", command], cwd=self.proof_dir,
+            capture_output=True, text=True, env=env,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(payload, (self.proof_dir / "captured").read_text())
+        self.assertFalse(marker.exists())
 
 if __name__ == "__main__":
     unittest.main()
